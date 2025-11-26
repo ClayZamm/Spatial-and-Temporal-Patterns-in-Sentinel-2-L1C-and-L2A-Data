@@ -1,12 +1,13 @@
 # Sentinel-2 L1C vs L2A Analysis Project
 
-This repository contains a complete pipeline for comparing Sentinel-2 L1C and L2A products across multiple locations and seasons in Sweden. The project covers everything from data acquisition to statistical analysis and visualization.
+This repository contains a complete pipeline for comparing Sentinel-2 L1C and L2A products across multiple locations and seasons in Sweden. The project covers everything from data acquisition to statistical analysis and visualization. The Google Earth Engine export workflow now also supports downloading matched Landsat 8 Collection 2 Tier 1 Level-1 and Level-2 scenes so that the same analyses can be extended to Landsat imagery.
 
 ---
 
 ## 📌 Project Objectives
 
 - Download and match Sentinel-2 L1C and L2A scenes using Google Earth Engine
+- Export paired Landsat 8 Level-1 (TOA) and Level-2 (Surface Reflectance) scenes for the same regions and seasons
 - Extract metadata and surface reflectance values
 - Perform regression analysis between L1C and L2A reflectance
 - Calculate residual statistics (mean, skewness, etc.)

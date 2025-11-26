@@ -28,8 +28,20 @@ Season_name = ("Winter", "Spring", "Summer", "Autumn")
 # Sentinel-2 image collections (Harmonized versions of L1C and L2A)
 Copernicus = ('COPERNICUS/S2_HARMONIZED', 'COPERNICUS/S2_SR_HARMONIZED')
 
+# Landsat-8 image collections (Collection 2 Tier 1)
+Landsat8 = {
+    "L1": 'LANDSAT/LC08/C02/T1_TOA',
+    "L2": 'LANDSAT/LC08/C02/T1_L2',
+}
+
+L8_L2_BANDS_30M = ['SR_B1', 'SR_B2', 'SR_B3', 'SR_B4', 'SR_B5', 'SR_B6', 'SR_B7', 'ST_B10']
+L8_L2_BANDS_15M = ['SR_B8']
+L8_L1_BANDS_30M = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'B11']
+L8_L1_BANDS_15M = ['B8']
+
 # Track locations with missing Sentinel data
 Missing_Sentinel_data = []
+Missing_Landsat_data = []
 
 # === MAIN PROCESSING LOOP ===
 for count_location, point_roi in enumerate(RoIs, start=1):
@@ -154,3 +166,98 @@ for count_location, point_roi in enumerate(RoIs, start=1):
             # If no image found, log missing case
             print(f'Missing matching data for Location {count_location} during {Season_name[count_season]}')
             Missing_Sentinel_data.append(f'Location {count_location} for {Season_name[count_season]} is missing')
+
+        # === LANDSAT-8 PROCESSING ===
+        L8_L2_collection = (
+            ee.ImageCollection(Landsat8["L2"])
+            .filterBounds(roi)
+            .filterDate(start_date, end_date)
+            .filter(ee.Filter.lt('CLOUD_COVER', 30))
+            .sort('CLOUD_COVER')
+        )
+        best_L8_L2_image = L8_L2_collection.first()
+
+        if best_L8_L2_image:
+            L8_L2_id = best_L8_L2_image.get('system:index')
+            L8_L2_id_string = L8_L2_id.getInfo()
+            L8_L1_collection = (
+                ee.ImageCollection(Landsat8["L1"])
+                .filterBounds(roi)
+                .filter(ee.Filter.eq('system:index', L8_L2_id_string))
+            )
+            best_L8_L1_image = L8_L1_collection.first()
+        else:
+            best_L8_L1_image = None
+
+        if best_L8_L2_image and best_L8_L1_image:
+            print(best_L8_L2_image.getInfo())
+
+            image_footprint_L8_L2 = best_L8_L2_image.geometry()
+            image_footprint_L8_L1 = best_L8_L1_image.geometry()
+
+            folder_name_L8_L2 = f"Location_{count_location}/{Season_name[count_season]}/Landsat8_L2"
+            folder_name_L8_L1 = f"Location_{count_location}/{Season_name[count_season]}/Landsat8_L1"
+            folder_name_local_L8_L2 = f"C:/Users/clayz/.../Project/Data/{folder_name_L8_L2}"
+            folder_name_local_L8_L1 = f"C:/Users/clayz/.../Project/Data/{folder_name_L8_L1}"
+
+            os.makedirs(folder_name_local_L8_L2, exist_ok=True)
+            os.makedirs(folder_name_local_L8_L1, exist_ok=True)
+
+            # === EXPORT LANDSAT-8 L2 ===
+            task_30m_L8_L2 = ee.batch.Export.image.toDrive(
+                image=best_L8_L2_image.select(L8_L2_BANDS_30M),
+                description=f"Landsat8_L2_30m_Bands_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}",
+                region=image_footprint_L8_L2,
+                scale=30,
+                maxPixels=1e10,
+                folder=folder_name_L8_L2
+            )
+
+            task_15m_L8_L2 = ee.batch.Export.image.toDrive(
+                image=best_L8_L2_image.select(L8_L2_BANDS_15M),
+                description=f"Landsat8_L2_15m_Bands_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}",
+                region=image_footprint_L8_L2,
+                scale=15,
+                maxPixels=1e10,
+                folder=folder_name_L8_L2
+            )
+
+            # === EXPORT LANDSAT-8 L1 ===
+            task_30m_L8_L1 = ee.batch.Export.image.toDrive(
+                image=best_L8_L1_image.select(L8_L1_BANDS_30M),
+                description=f"Landsat8_L1_30m_Bands_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}",
+                region=image_footprint_L8_L1,
+                scale=30,
+                maxPixels=1e10,
+                folder=folder_name_L8_L1
+            )
+
+            task_15m_L8_L1 = ee.batch.Export.image.toDrive(
+                image=best_L8_L1_image.select(L8_L1_BANDS_15M),
+                description=f"Landsat8_L1_15m_Bands_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}",
+                region=image_footprint_L8_L1,
+                scale=15,
+                maxPixels=1e10,
+                folder=folder_name_L8_L1
+            )
+
+            # === Start all export tasks ===
+            task_30m_L8_L2.start()
+            task_15m_L8_L2.start()
+            task_30m_L8_L1.start()
+            task_15m_L8_L1.start()
+
+            # === Save metadata locally ===
+            metadata_L8_L2 = best_L8_L2_image.getInfo()
+            metadata_filename_L8_L2 = f"{folder_name_local_L8_L2}/metadata_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}.json"
+            with open(metadata_filename_L8_L2, 'w') as f:
+                json.dump(metadata_L8_L2, f, indent=4)
+
+            metadata_L8_L1 = best_L8_L1_image.getInfo()
+            metadata_filename_L8_L1 = f"{folder_name_local_L8_L1}/metadata_{point_roi[0]}_{point_roi[1]}_{start_date}_{end_date}.json"
+            with open(metadata_filename_L8_L1, 'w') as f:
+                json.dump(metadata_L8_L1, f, indent=4)
+
+        else:
+            print(f'Missing Landsat-8 data for Location {count_location} during {Season_name[count_season]}')
+            Missing_Landsat_data.append(f'Location {count_location} for {Season_name[count_season]} is missing')
